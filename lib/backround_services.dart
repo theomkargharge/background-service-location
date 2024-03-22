@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:ui';
+import 'package:dash_bubble/dash_bubble.dart';
+import 'package:device_apps/device_apps.dart';
+import 'package:external_app_launcher/external_app_launcher.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_bg_service/api_binding.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:overlay_pop_up/overlay_pop_up.dart';
 
 Future<void> initializeService() async {
   final service = FlutterBackgroundService();
@@ -38,44 +42,60 @@ Future<Position> determinePosition() async {
   return await Geolocator.getCurrentPosition();
 }
 
-// this services is for android 
+// this services is for android
 @pragma('vm:entry-point')
-void onStart(ServiceInstance serivce) async {
-  DartPluginRegistrant.ensureInitialized();
-  if (serivce is AndroidServiceInstance) {
-    serivce.on('setAsForeground').listen((event) {
-      serivce.setAsForegroundService();
+void onStart(ServiceInstance service) async {
+  // DartPluginRegistrant.ensureInitialized();
+  if (service is AndroidServiceInstance) {
+    service.on('setAsForeground').listen((event) {
+      service.setAsForegroundService();
     });
-    serivce.on('setAsBackground').listen((event) {
-      serivce.setAsBackgroundService();
+    service.on('setAsBackground').listen((event) {
+      service.setAsBackgroundService();
     });
-    serivce.on('stopService').listen((event) {
-      serivce.stopSelf();
+    service.on('stopService').listen((event) {
+      service.stopSelf();
     });
   }
   ApiClient apiClient = ApiClient();
 
-  //hitting api on every second to get the location 
-  Timer.periodic(const Duration(seconds: 1), (timer) async {
-    if (serivce is AndroidServiceInstance) {
-      if (await serivce.isForegroundService()) {
-        determinePosition().then((value) {
-          debugPrint('This is Latitude ${value.latitude}');
-          debugPrint('This is Longitude ${value.longitude}');
-          apiClient
-              .sendLatLong(
-                  id: 65, latitude: value.latitude, longitude: value.latitude)
-              .catchError((onError) => debugPrint('$onError'));
-        });
+  //hitting api on every second to get the location
+
+  Timer.periodic(const Duration(seconds: 10), (timer) async {
+    if (service is AndroidServiceInstance) {
+      if (await service.isForegroundService()) {
+        service.setForegroundNotificationInfo(
+            title: 'Background Services is working',
+            content: 'Updated At ${DateTime.now()}');
+
+        await DeviceApps.openApp('com.example.flutter_bg_service');
+
+        debugPrint('background service is working');
       }
     }
-    debugPrint('background service working');
-    serivce.invoke('update');
+
   });
+
+  final permission = await OverlayPopUp.checkPermission();
+  if (permission) {
+    if (!await OverlayPopUp.isActive()) {
+      await OverlayPopUp.showOverlay(
+        width: 300,
+        height: 350,
+        screenOrientation: ScreenOrientation.portrait,
+        closeWhenTapBackButton: false,
+        isDraggable: true,
+      );
+      return;
+    } else {
+      final result = await OverlayPopUp.closeOverlay();
+    }
+  } else {
+    await OverlayPopUp.requestPermission();
+  }
 }
 
-
-// This for IOS For enableing background serivce 
+// This for IOS For enableing background serivce
 @pragma('vm:entry-point')
 Future<bool> onBackground(ServiceInstance serviceInstance) async {
   WidgetsFlutterBinding.ensureInitialized();
